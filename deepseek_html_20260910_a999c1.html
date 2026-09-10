@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>UNAERP Navigator</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root { --unaerp-blue: #001B3D; --unaerp-accent: #0047AB; --unaerp-yellow: #FFC107; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body, html { height: 100%; width: 100%; overflow: hidden; background-color: #F4F6F9; }
+        #app { width: 100%; height: 100%; display: flex; flex-direction: column; position: relative; }
+        
+        .screen { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding-bottom: 70px; }
+        .screen.active { display: flex; }
+
+        /* Cabeçalho */
+        .header { background-color: var(--unaerp-blue); color: white; padding: 20px 15px; text-align: center; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; flex-shrink: 0; }
+        .header h1 { font-size: 22px; font-style: italic; font-weight: 800; }
+        .header p { font-size: 11px; margin-top: 5px; opacity: 0.8; }
+
+        /* Tela Inicial */
+        .search-bar { margin: 15px; position: relative; }
+        .search-bar input { width: 100%; padding: 15px 15px 15px 40px; border: none; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 14px; }
+        .search-bar i { position: absolute; left: 15px; top: 15px; color: #888; }
+
+        .grid-categories { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 15px; }
+        .cat-btn { background: white; border: none; padding: 15px 5px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; }
+        .cat-btn:active { background: #e6e6e6; }
+        .cat-btn i { font-size: 20px; color: var(--unaerp-accent); margin-bottom: 8px; }
+        .cat-btn span { font-size: 10px; font-weight: 600; color: #333; }
+
+        .btn-location { background-color: var(--unaerp-accent); color: white; border: none; margin: 20px 15px; padding: 15px; border-radius: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
+        
+        /* Mapas */
+        .map-container { flex: 1; position: relative; display: flex; flex-direction: column; }
+        .map-view { flex: 1; width: 100%; height: 100%; z-index: 1; }
+        
+        /* Lista de Destinos */
+        .list-item { background: white; margin: 10px 15px; padding: 15px; border-radius: 10px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; }
+        .list-item i { font-size: 24px; color: var(--unaerp-accent); width: 30px; text-align: center; }
+        .list-item div { flex: 1; }
+        .list-item h4 { font-size: 16px; color: #333; }
+        .list-item p { font-size: 12px; color: #777; }
+
+        /* Navegação */
+        .nav-banner-top { position: absolute; top: 10px; left: 10px; right: 10px; background: var(--unaerp-blue); color: white; padding: 15px; border-radius: 10px; z-index: 1000; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .nav-banner-bottom { position: absolute; bottom: 20px; left: 10px; right: 10px; background: white; padding: 15px; border-radius: 10px; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 15px; }
+        .nav-arrow { font-size: 30px; color: var(--unaerp-accent); }
+        
+        /* Bússola */
+        .compass-container { flex: 1; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; position: relative; }
+        .compass-circle { width: 250px; height: 250px; border: 2px solid #333; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; margin-top: 20px; }
+        .compass-arrow { font-size: 60px; color: var(--unaerp-yellow); transition: transform 0.1s linear; }
+        .compass-distance { font-size: 48px; font-weight: bold; margin-bottom: 10px; }
+        .compass-label { font-size: 18px; color: #aaa; margin-bottom: 20px; }
+        
+        .btn-compass-permission { background: var(--unaerp-accent); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; margin-top: 20px; cursor: pointer; display: none; }
+
+        /* Barra Inferior Fixa */
+        .bottom-nav { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; background: white; display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #ddd; z-index: 2000; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #888; font-size: 10px; cursor: pointer; }
+        .nav-item.active { color: var(--unaerp-accent); }
+        .nav-item i { font-size: 20px; margin-bottom: 3px; }
+
+        .btn-back { position: absolute; top: 20px; left: 20px; background: white; border: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1001; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        
+        /* Esconder créditos padrão do Leaflet para layout mais limpo */
+        .leaflet-control-attribution { font-size: 8px; }
+        
+        /* Esconder o painel de instruções padrão do Leaflet Routing Machine */
+        .leaflet-routing-container { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- TELA 1: HOME -->
+    <div id="screen-home" class="screen active">
+        <div class="header">
+            <h1>UNAERP NAVIGATOR</h1>
+            <p>Encontre o seu destino no campus com facilidade.</p>
+        </div>
+        <div class="search-bar">
+            <i class="fas fa-search"></i>
+            <input type="text" placeholder="Buscar um local..." id="search-input">
+        </div>
+        <div class="grid-categories">
+            <button class="cat-btn" onclick="filterCategory('Blocos')"><i class="fas fa-building"></i><span>Blocos</span></button>
+            <button class="cat-btn" onclick="filterCategory('Biblioteca')"><i class="fas fa-book"></i><span>Biblioteca</span></button>
+            <button class="cat-btn" onclick="filterCategory('Restaurante')"><i class="fas fa-utensils"></i><span>Restaurante</span></button>
+            <button class="cat-btn" onclick="filterCategory('Hospital')"><i class="fas fa-hospital"></i><span>Hospital</span></button>
+            <button class="cat-btn" onclick="filterCategory('Praça')"><i class="fas fa-tree"></i><span>Praça</span></button>
+        </div>
+        <button class="btn-location" onclick="startTracking()">
+            <i class="fas fa-location-arrow"></i> Usar minha localização
+        </button>
+    </div>
+
+    <!-- TELA 2: SELEÇÃO DE DESTINO -->
+    <div id="screen-select" class="screen">
+        <div class="header" style="padding: 15px; border-radius: 0; display: flex; align-items: center;">
+            <i class="fas fa-chevron-left" onclick="switchScreen('screen-home')" style="cursor: pointer; margin-right: 15px; font-size: 18px;"></i>
+            <h2 style="font-size: 16px;">Selecionar destino</h2>
+        </div>
+        <div id="destination-list" style="padding-bottom: 20px;"></div>
+    </div>
+
+    <!-- TELA 3: NAVEGAÇÃO NO MAPA -->
+    <div id="screen-nav" class="screen">
+        <div class="map-container">
+            <div id="map-nav" class="map-view"></div>
+            <button class="btn-back" onclick="switchScreen('screen-home')"><i class="fas fa-times"></i></button>
+            <div class="nav-banner-top">
+                <div>
+                    <h3 style="font-size: 14px;" id="nav-instruction">Trajeto calculado</h3>
+                    <p style="font-size: 11px; opacity: 0.8;" id="nav-distance">Calculando...</p>
+                </div>
+                <div style="text-align: right;">
+                    <h4 style="font-size: 14px;" id="nav-time">-- min</h4>
+                </div>
+            </div>
+            <div class="nav-banner-bottom">
+                <i class="fas fa-route nav-arrow" id="nav-arrow-icon"></i>
+                <div>
+                    <h4 style="font-size: 14px; color: #333;" id="nav-action">Rota traçada</h4>
+                    <p style="font-size: 11px; color: #777;" id="nav-action-dist">-- m</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TELA 4: BÚSSOLA -->
+    <div id="screen-compass" class="screen">
+        <div class="compass-container">
+            <button class="btn-back" style="background: #333; color: white;" onclick="switchScreen('screen-nav')"><i class="fas fa-arrow-left"></i></button>
+            <h2 style="margin-bottom: 20px; font-size: 18px;" id="compass-dest-name">Destino</h2>
+            <div class="compass-distance" id="compass-distance">0 m</div>
+            <div class="compass-label">à sua frente</div>
+            
+            <div class="compass-circle">
+                <i class="fas fa-location-arrow compass-arrow" id="compass-arrow"></i>
+            </div>
+            
+            <button class="btn-compass-permission" id="btn-permission" onclick="requestCompassPermission()">Ativar Sensor da Bússola</button>
+            <p style="margin-top: 20px; font-size: 12px; color: #888; text-align: center; padding: 0 20px;">
+                Aponte o celular para frente. A seta indica a direção do destino.
+            </p>
+        </div>
+    </div>
+
+    <!-- NAVEGAÇÃO INFERIOR -->
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="switchScreen('screen-home')"><i class="fas fa-home"></i><span>Início</span></div>
+        <div class="nav-item" onclick="switchScreen('screen-nav')"><i class="fas fa-map"></i><span>Mapa</span></div>
+        <div class="nav-item" onclick="switchScreen('screen-compass')"><i class="fas fa-compass"></i><span>Bússola</span></div>
+    </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Routing Machine JS -->
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+    // ============================================================
+    // 1. BANCO DE DADOS DO CAMPUS (Com todos os pontos recebidos)
+    // ============================================================
+    const campusData = [
+        { id: 1,  name: "Bloco A - Reitoria",           cat: "Blocos",      lat: -21.202398, lng: -47.779552, desc: "Reitoria e Registros Acadêmicos" },
+        { id: 2,  name: "Bloco B - Multiatendimento",   cat: "Blocos",      lat: -21.202803, lng: -47.779707, desc: "Financeiro e Benefícios" },
+        { id: 3,  name: "Bloco C - Centro de Benefícios", cat: "Blocos",    lat: -21.201472, lng: -47.779825, desc: "Benefícios e Capela" },
+        { id: 4,  name: "Bloco D - Centro de Convivência", cat: "Blocos",   lat: -21.201611, lng: -47.778534, desc: "Convivência e Alimentação" },
+        { id: 13, name: "Biblioteca (Bloco E)",         cat: "Biblioteca",  lat: -21.201356, lng: -47.778443, desc: "Biblioteca Central - 1º andar" },
+        { id: 14, name: "Bloco F - Teatro",             cat: "Blocos",      lat: -21.200865, lng: -47.778373, desc: "Teatro Bassano Vaccarini" },
+        { id: 7,  name: "Bloco G - DCINI",              cat: "Blocos",      lat: -21.202758, lng: -47.778645, desc: "Cooperação Nacional e Internacional" },
+        { id: 6,  name: "Bloco H - Cursos e Labs",      cat: "Blocos",      lat: -21.202868, lng: -47.779203, desc: "Salas de aula e laboratórios" },
+        { id: 27, name: "Hospital Electro Bonini",      cat: "Hospital",    lat: -21.201121, lng: -47.779977, desc: "Hospital Universitário - Bloco N" },
+        { id: 9,  name: "Bloco K - Salas de Tutoria",   cat: "Blocos",      lat: -21.202236, lng: -47.778506, desc: "Tutoria - Curso de Medicina" },
+        { id: 11, name: "Bloco O - Suprimentos",        cat: "Blocos",      lat: -21.201896, lng: -47.778527, desc: "Suprimentos e Infraestrutura" },
+        { id: 28, name: "Bloco S",                      cat: "Blocos",      lat: -21.201306, lng: -47.779291, desc: "Bloco S" },
+        { id: 25, name: "Restaurante Universitário",    cat: "Restaurante", lat: -21.200725, lng: -47.779017, desc: "RU / Bloco L" },
+        { id: 30, name: "Praça Central",                cat: "Praça",       lat: -21.201819, lng: -47.779230, desc: "Praça de Alimentação e Convivência" }
+    ];
+
+    // ============================================================
+    // 2. VARIÁVEIS GLOBAIS
+    // ============================================================
+    let mapNav;
+    let userLat = null, userLng = null;
+    let userMarker = null;
+    let destLat = null, destLng = null;
+    let routingControl = null;      // Controla a rota do OSRM
+    let watchId = null;             // ID do rastreamento GPS
+    let destinationMarker = null;   // Marcador do destino atual
+    let isCompassActive = false;
+
+    const defaultCenter = [-21.2019, -47.7791]; // Centro do campus UNAERP
+
+    // ============================================================
+    // 3. INICIALIZAÇÃO DO MAPA
+    // ============================================================
+    function initMaps() {
+        mapNav = L.map('map-nav', { zoomControl: false }).setView(defaultCenter, 17);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(mapNav);
+
+        // Adiciona os pinos de todos os blocos
+        campusData.forEach(loc => {
+            L.marker([loc.lat, loc.lng])
+                .addTo(mapNav)
+                .bindPopup(`<b>${loc.name}</b><br>${loc.desc}`);
+        });
+    }
+
+    // ============================================================
+    // 4. CONTROLE DE TELAS
+    // ============================================================
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        if (screenId === 'screen-home')    document.querySelectorAll('.nav-item')[0].classList.add('active');
+        if (screenId === 'screen-nav')     document.querySelectorAll('.nav-item')[1].classList.add('active');
+        if (screenId === 'screen-compass') {
+            document.querySelectorAll('.nav-item')[2].classList.add('active');
+            checkCompassPermission();
+        }
+
+        // Corrige renderização do Leaflet ao voltar para o mapa
+        setTimeout(() => {
+            if (mapNav) mapNav.invalidateSize();
+        }, 200);
+    }
+
+    // ============================================================
+    // 5. GPS EM TEMPO REAL
+    // ============================================================
+    function startTracking() {
+        if (!navigator.geolocation) {
+            alert("Geolocalização não é suportada por este navegador.");
+            return;
+        }
+
+        const btn = document.querySelector('.btn-location');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obtendo sinal...';
+
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                userLat = position.coords.latitude;
+                userLng = position.coords.longitude;
+
+                btn.innerHTML = '<i class="fas fa-check"></i> Localização Ativa';
+
+                // Cria ou atualiza o marcador do usuário (ponto azul)
+                if (userMarker) {
+                    userMarker.setLatLng([userLat, userLng]);
+                } else {
+                    userMarker = L.circleMarker([userLat, userLng], {
+                        color: '#FFFFFF',
+                        weight: 3,
+                        fillColor: '#0047AB',
+                        fillOpacity: 1,
+                        radius: 8
+                    }).addTo(mapNav).bindPopup("Você está aqui");
+                    
+                    mapNav.setView([userLat, userLng], 18);
+                }
+
+                // Se houver uma rota ativa, recalcula o trajeto automaticamente
+                if (routingControl && destLat && destLng) {
+                    updateRouteWaypoints();
+                }
+            },
+            (error) => {
+                console.error("Erro de GPS:", error);
+                let msg = "Erro ao obter localização. ";
+                if (error.code === 1) msg += "Permissão negada.";
+                if (error.code === 2) msg += "GPS indisponível. Verifique se está ligado.";
+                if (error.code === 3) msg += "Tempo esgotado.";
+                alert(msg);
+                btn.innerHTML = '<i class="fas fa-location-arrow"></i> Usar minha localização';
+            },
+            { 
+                enableHighAccuracy: true, 
+                maximumAge: 5000, 
+                timeout: 15000 
+            }
+        );
+    }
+
+    // ============================================================
+    // 6. FILTRO POR CATEGORIA E SELEÇÃO DE DESTINO
+    // ============================================================
+    function filterCategory(cat) {
+        switchScreen('screen-select');
+        const list = document.getElementById('destination-list');
+        list.innerHTML = '';
+        
+        const filtered = campusData.filter(loc => loc.cat === cat);
+        
+        if (filtered.length === 0) {
+            list.innerHTML = '<p style="text-align:center; padding:20px; color:#888;">Nenhum local nesta categoria.</p>';
+            return;
+        }
+
+        filtered.forEach(loc => {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.innerHTML = `
+                <i class="fas fa-map-marker-alt"></i>
+                <div><h4>${loc.name}</h4><p>${loc.desc}</p></div>
+                <i class="fas fa-chevron-right" style="color:#ccc; font-size:14px;"></i>
+            `;
+            div.onclick = () => selectDestination(loc);
+            list.appendChild(div);
+        });
+    }
+
+    function selectDestination(loc) {
+        destLat = loc.lat;
+        destLng = loc.lng;
+        document.getElementById('compass-dest-name').innerText = loc.name;
+        
+        switchScreen('screen-nav');
+        
+        // Remove o controle de rota anterior
+        if (routingControl) {
+            mapNav.removeControl(routingControl);
+            routingControl = null;
+        }
+
+        // Remove o marcador de destino anterior
+        if (destinationMarker) {
+            mapNav.removeLayer(destinationMarker);
+        }
+
+        // Adiciona um marcador para o novo destino
+        destinationMarker = L.marker([destLat, destLng]).addTo(mapNav).bindPopup(loc.name).openPopup();
+        
+        // Verifica se temos a localização do usuário
+        if (!userLat || !userLng) {
+            alert("Clique em 'Usar minha localização' na tela inicial primeiro para traçar a rota exata!");
+            return;
+        }
+
+        // Cria a rota real usando OSRM (gratuito, sem chave de API)
+        createRoute();
+    }
+
+    // ============================================================
+    // 7. CRIAÇÃO E ATUALIZAÇÃO DA ROTA (OSRM)
+    // ============================================================
+    function createRoute() {
+        if (!userLat || !userLng || !destLat || !destLng) return;
+
+        routingControl = L.Routing.control({
+            waypoints: [
+                L.latLng(userLat, userLng),
+                L.latLng(destLat, destLng)
+            ],
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://router.project-osrm.org/route/v1',
+                profile: 'foot' // Perfil de caminhada
+            }),
+            lineOptions: {
+                styles: [{ color: '#0047AB', weight: 6, opacity: 0.9 }]
+            },
+            show: false,
+            addWaypoints: false,
+            routeWhileDragging: false,
+            fitSelectedRoutes: true,
+            showAlternatives: false
+        }).addTo(mapNav);
+
+        // Quando a rota é encontrada, atualiza as informações
+        routingControl.on('routesfound', function(e) {
+            const route = e.routes[0];
+            const distanceMeters = Math.round(route.summary.totalDistance);
+            const tempoMin = Math.ceil(route.summary.totalTime / 60);
+
+            document.getElementById('nav-distance').innerText = `Trajeto de ${distanceMeters} m`;
+            document.getElementById('nav-time').innerText = `${tempoMin} min`;
+            document.getElementById('nav-action').innerText = `Rota até ${document.getElementById('compass-dest-name').innerText}`;
+            document.getElementById('nav-action-dist').innerText = `${distanceMeters} m`;
+            document.getElementById('compass-distance').innerText = `${distanceMeters} m`;
+        });
+
+        routingControl.on('routingerror', function(e) {
+            console.error("Erro na rota:", e);
+            alert("Não foi possível calcular a rota. Verifique sua conexão com a internet.");
+        });
+    }
+
+    // Atualiza o waypoint inicial quando o usuário se move (trajeto em tempo real)
+    function updateRouteWaypoints() {
+        if (!routingControl || !destLat || !destLng) return;
+        
+        const waypoints = routingControl.getWaypoints();
+        waypoints[0].latLng = L.latLng(userLat, userLng);
+        routingControl.setWaypoints(waypoints);
+    }
+
+    // ============================================================
+    // 8. BÚSSOLA EM TEMPO REAL (Android e iOS)
+    // ============================================================
+    function checkCompassPermission() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && 
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ precisa de solicitação explícita
+            document.getElementById('btn-permission').style.display = 'block';
+        } else if (window.DeviceOrientationEvent) {
+            // Android - funciona direto
+            if (!isCompassActive) {
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                isCompassActive = true;
+            }
+        } else {
+            document.getElementById('btn-permission').innerText = "Sensor não disponível";
+        }
+    }
+
+    function requestCompassPermission() {
+        DeviceOrientationEvent.requestPermission()
+            .then(permissionState => {
+                if (permissionState === 'granted') {
+                    window.addEventListener('deviceorientation', handleOrientation, true);
+                    isCompassActive = true;
+                    document.getElementById('btn-permission').style.display = 'none';
+                } else {
+                    alert("Permissão negada. A bússola não pode ser ativada.");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erro ao ativar a bússola: " + err.message);
+            });
+    }
+
+    function handleOrientation(event) {
+        if (!document.getElementById('screen-compass').classList.contains('active')) return;
+        if (!userLat || !destLat) return;
+
+        let heading = event.webkitCompassHeading || event.alpha;
+        
+        if (heading !== null && heading !== undefined) {
+            // Calcula o ângulo do usuário até o destino
+            const dy = destLat - userLat;
+            const dx = Math.cos(Math.PI / 180 * userLat) * (destLng - userLng);
+            let angleToDest = Math.atan2(dy, dx) * 180 / Math.PI;
+            angleToDest = (angleToDest + 360) % 360;
+            
+            // Rotaciona a seta para apontar para o destino
+            const arrow = document.getElementById('compass-arrow');
+            const rotation = angleToDest - heading;
+            arrow.style.transform = `rotate(${rotation}deg)`;
+        }
+    }
+
+    // ============================================================
+    // 9. BUSCA POR TEXTO
+    // ============================================================
+    function setupSearch() {
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            if (query.length > 2) {
+                switchScreen('screen-select');
+                const list = document.getElementById('destination-list');
+                list.innerHTML = '';
+                const filtered = campusData.filter(loc => 
+                    loc.name.toLowerCase().includes(query) || 
+                    loc.desc.toLowerCase().includes(query)
+                );
+
+                if (filtered.length === 0) {
+                    list.innerHTML = '<p style="text-align:center; padding:20px; color:#888;">Nenhum resultado encontrado.</p>';
+                    return;
+                }
+
+                filtered.forEach(loc => {
+                    const div = document.createElement('div');
+                    div.className = 'list-item';
+                    div.innerHTML = `<i class="fas fa-search"></i><div><h4>${loc.name}</h4><p>${loc.desc}</p></div>`;
+                    div.onclick = () => selectDestination(loc);
+                    list.appendChild(div);
+                });
+            }
+        });
+    }
+
+    // ============================================================
+    // 10. INICIALIZAÇÃO GERAL
+    // ============================================================
+    window.onload = () => {
+        initMaps();
+        setupSearch();
+    };
+</script>
+</body>
+</html>
